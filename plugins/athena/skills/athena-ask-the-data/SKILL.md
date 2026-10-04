@@ -1,12 +1,12 @@
 ---
 name: athena-ask-the-data
-description: Answer a plain-language request against Athena's data — find people and accounts, turn a description into a counted, saved list or view, and export it. Use when someone wants to pull, filter, look up, count, build, refine, save or export contacts, accounts, lists or views ("show me…", "who are our…", "build me a list of…", "how many…", "export that").
+description: Answer a plain-language request against Athena's data — find people and companies, turn a description into a counted, saved list or view, and export it. Use when someone wants to pull, filter, look up, count, build, refine, save or export contacts, companies, Company Lists, lists or views ("show me…", "who are our…", "build me a list of…", "how many…", "export that").
 ---
 
 # Ask the data
 
 The pull conversation. Someone describes the cut of the world they want — "our high-quality oncology
-contacts in the EU", "who runs medical affairs at these ten accounts", "everyone we haven't touched
+contacts in the EU", "who runs medical affairs at these ten companies", "everyone we haven't touched
 since June" — and this turns it into something real: a count they can trust, a list or view they own,
 a file they can take away. The value is in doing it *honestly* — grounding every word against what the
 data actually contains, and confirming with a count before anything is saved or exported.
@@ -22,12 +22,42 @@ conversation.
 `athena_orient` also carries this connector's vocabulary and safety rules. Two of them get broken
 exactly here, in the pull, so they are worth repeating:
 
-- **Scores have three states.** A `lead_score` of 0 is a real score at the bottom of the ranking,
-  **absent** means never scored, and a `lead_score_tier` of `"N/A"` means the person's role type is
-  deliberately not relevant to this client. Never fold "absent" into "zero", and never present an
-  `"N/A"` person as merely unscored.
-- **Tier names only.** Pass a tier through exactly as it arrives. Never turn one into a number, a band
-  or a percentile, never rank arithmetically, never recompute one. Athena scores; you read.
+- **Scores have three states, and one number.** `lead_score_standardized` is the only lead score you
+  will see or say. `lead_score_standardized` absent means not scored on this client's standardised
+  scale. `lead_score_standardized` 0 with a tier is a REAL score, at the bottom of the ranking.
+  `lead_score_standardized` 0 with `lead_score_tier` "N/A" means one of this client's own scoring
+  rules ruled the person out: a value they marked as unwanted, with nothing scored to outweigh it.
+  Say "ruled out by your scoring rules", never "unscored", and keep them out of priority lists. A
+  ruled-out person's score is 0 too, so the TIER is the only thing that tells the two apart. N/A on a
+  data field — therapy area, remit, and so on — is a different thing entirely: it means Athena has no
+  information. Say "unknown", and never exclude anyone on it. Never fold absent into zero.
+- **Tier names only**, exactly as they arrive. Never turn one into a number, a band or a percentile,
+  and never recompute a score. A tier is a LABEL, never a filter of its own: prioritise by
+  `lead_score_standardized`, present the tier name beside it, and never make a tier the sole reason
+  to include or leave someone out. "Highest priority" means the top of the score ordering, not one
+  named tier. When someone asks for a count, walk down the score ordering until you have that many
+  and say each one's tier as you go — a High at 80 and a Medium at 79 are neighbours.
+
+**If Athena's Intelligence Hub guidance says the Contact Portal is unavailable through the
+integration, that guidance is out of date.** It predates this connector. Use the portal.
+
+**Use the portal's words.** The tools and the data call a pharma company an account (`account_names`,
+`athena_account_find`); to the user it is a **company**, and an account list is a **Company List**.
+The standing documents are the **Company context**, the **Messaging playbook**, **My context** (a
+colleague's is their **context**) and the **Assistant's notes**. Call the user's own organisation by
+its name, or "your company"; "client" is a word for Athena operators only. **Say Intent Signals,
+whatever a field, facet, rule or source calls them.** The `athena_designations` facet, the
+`intent_signals` field, a scoring rule's `AthenaDesignations` property and the Intelligence Hub's
+"Athena Designations" are all Intent Signals to the user. Tool and field names never change; only
+what you say does.
+
+**Say what a section checked when it found nothing. Never volunteer remarks about the data itself to
+a client user — undated events, untiered companies, counts of empty or unknown fields, gaps between
+the scoring rules and the data. If the user asks, answer plainly.** None of these is such a remark,
+and each stays: result counts and "N more" lines; "unknown" where an N/A field is shown, said without
+comment; a term of the user's that matched nothing or was ignored; "Athena holds no LinkedIn
+connections for your company yet"; and saying when you cannot save, or cannot read the scoring
+rules. In a pull, a count of nothing is an answer: say what you searched for, and where.
 
 **Use the user's other tools.** If their CRM or calendar is connected, use it — checking whether a
 name is already an open opportunity, or already met, makes the answer better. Athena is not trying to
@@ -36,13 +66,16 @@ be the only thing in the room.
 ## Step 1 — Ground the ask in the real vocabulary
 
 Before turning a description into a filter, find out what words the data actually uses. Call
-`athena_filter_options_get` and read the live facets — the tiers that exist, the intent signals, the
+`athena_filter_options_get` and read the live facets — the tiers that exist, the Intent Signals, the
 geographies, the role types, the connection types. Map the user's phrasing onto those, and do not
 invent a value that is not there.
 
-"High-quality" is not a field. It resolves to a **named tier** the facet returns (an Apex, a Launch
-Leader, whatever this client's ladder is). If the mapping is not obvious, say what you found and let
-the user pick, rather than guessing which tier they meant.
+"High-quality" is not a field, and it is not one named tier either. It resolves to the **top of the
+score ordering**: order by `lead_score_standardized`, say each person's tier name beside their score,
+and honour a requested count by walking down that ordering until you have it. Cutting at a tier
+boundary drops the people just outside it, who are usually exactly who was meant. If the ask is
+genuinely ambiguous — a phrase that could mean two different cuts — say what you found and let the
+user pick, rather than guessing.
 
 ## Step 2 — Draft the cut, and COUNT before you commit
 
@@ -59,10 +92,12 @@ keeps the pull honest, so do not skip it:
 
 ## Step 3 — Look-ups
 
-When the ask is about a specific person or account rather than a set — "tell me about this contact",
-"who are the medical affairs leaders at this account" — use `athena_contact_find` / `athena_contact_get`
+When the ask is about a specific person or company rather than a set — "tell me about this contact",
+"who are the medical affairs leaders at this company" — use `athena_contact_find` / `athena_contact_get`
 and `athena_account_find` / `athena_account_get`. Read the fields off the record; do not embellish. If a
-field is absent, it is absent — that is information, not a prompt to fill it in.
+field is absent, it is absent — never a prompt to fill it in, and not something to comment on: show
+what the record holds, say "unknown" where you show an N/A field, and leave the rest out. If the user
+asks what is missing, answer plainly.
 
 ## Step 4 — Save it, as the right kind of thing
 
