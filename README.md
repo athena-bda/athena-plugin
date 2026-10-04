@@ -8,7 +8,7 @@ Portal** and the **Athena Intelligence Hub**, packaged for one-step installation
 In Claude Code:
 
 ```
-/plugin marketplace add athena-bda/claude-plugin
+/plugin marketplace add athena-bda/athena-plugin
 /plugin install athena@athena-bda
 ```
 
